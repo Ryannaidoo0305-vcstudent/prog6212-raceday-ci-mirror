@@ -358,3 +358,45 @@ PRINT CONCAT('STEP 9 complete: ', @n, ' table and column descriptions stored');
 GO
 
 
+-- =====================================================================
+-- STEP 10: Seed data - roles, event types and users
+--   IDENTITY_INSERT lets us use fixed IDs so the foreign keys below are
+--   easy to follow. XACT_ABORT rolls everything back if any row fails.
+-- =====================================================================
+SET XACT_ABORT ON;
+BEGIN TRANSACTION;
+
+SET IDENTITY_INSERT dbo.Roles ON;
+INSERT INTO dbo.Roles (RoleId, RoleName)
+VALUES (1, N'Organiser'),
+       (2, N'Participant');
+SET IDENTITY_INSERT dbo.Roles OFF;
+
+SET IDENTITY_INSERT dbo.EventTypes ON;
+INSERT INTO dbo.EventTypes (EventTypeId, TypeName)
+VALUES (1, N'Run'),
+       (2, N'Walk'),
+       (3, N'Cycle');
+SET IDENTITY_INSERT dbo.EventTypes OFF;
+
+-- Password for all demo users: RaceDay@2026 (BCrypt, cost 11)
+SET IDENTITY_INSERT dbo.Users ON;
+INSERT INTO dbo.Users
+    (UserId, RoleId, FirstName, LastName, Email, PasswordHash, PhoneNumber, DateOfBirth, ProfilePictureUrl, CreatedAt)
+VALUES
+    -- Organisers (RoleId 1)
+    (1, 1, N'Thandi', N'Mokoena',       N'thandi.mokoena@example.com', N'$2a$11$wj6inT9j12Da9caXJQflmeMsmucCODikYIMnxXSBMGERv1jumu7Cu', N'082 555 0101', NULL,         NULL, '2026-05-04T08:30:00'),
+    (2, 1, N'Pieter', N'van der Merwe', N'pieter.vdmerwe@example.com', N'$2a$11$NNCYCv1wLHPIUvg8MGnTN.HUU2OZOwV2Qd13VYpdil3oLF/rLv3fO', N'083 555 0102', NULL,         NULL, '2026-05-06T10:15:00'),
+    -- Participants (RoleId 2)
+    (3, 2, N'Sipho',  N'Ndlovu',        N'sipho.ndlovu@example.com',   N'$2a$11$dm1FMgHlLr0oA0VHvEKvPOU01M8Khxk.DgH38ey0QEcIV5DW6ZPim', N'071 555 0103', '1994-03-12', NULL, '2026-05-20T19:05:00'),
+    (4, 2, N'Aisha',  N'Patel',         N'aisha.patel@example.com',    N'$2a$11$O1cENnzJQBo2uhqU.hST.uYtwy9wyjkkL7XSgu6owWjZoZtdwbNNe', N'072 555 0104', '2001-07-25', NULL, '2026-06-18T12:40:00'),
+    (5, 2, N'Lerato', N'Dlamini',       N'lerato.dlamini@example.com', N'$2a$11$WBIcsPrlpT75IFs/QnTcPezlpOEfRgLdZfWw8g2iYkB2TIBBDL40K', N'073 555 0105', '1983-11-02', NULL, '2026-06-09T07:15:00'),
+    (6, 2, N'Johan',  N'Botha',         N'johan.botha@example.com',    N'$2a$11$cS2gwsbPMHklOit.zMrDUeLVThMB7M6MzHjxiEkwG90NYGQ8ftfPe', N'074 555 0106', '1971-05-30', NULL, '2026-06-28T17:50:00'),
+    (7, 2, N'Kabelo', N'Molefe',        N'kabelo.molefe@example.com',  N'$2a$11$VGLhem1qcFmVdgwc2ckbm.vyeF.j6Qeys3gKb6aNtcos5KXiTBc2O', N'076 555 0107', '2007-10-15', NULL, '2026-06-03T15:25:00');
+SET IDENTITY_INSERT dbo.Users OFF;
+
+COMMIT TRANSACTION;
+PRINT 'STEP 10 complete: roles, event types and 7 users seeded';
+GO
+
+
