@@ -203,3 +203,30 @@ PRINT 'STEP 6 complete: Enrolments created';
 GO
 
 
+-- =====================================================================
+-- STEP 7: Results - finish time and position for one enrolment
+-- =====================================================================
+CREATE TABLE dbo.Results
+(
+    ResultId            INT             IDENTITY(1,1)  NOT NULL,
+    EnrolmentId         INT             NOT NULL,   -- UNIQUE: one result per enrolment (1 to 0..1)
+    FinishTime          TIME(0)         NOT NULL,   -- hh:mm:ss, e.g. 01:21:37
+    FinishPosition      INT             NOT NULL,   -- overall position, e.g. 47 (of 312 finishers)
+    IsPublished         BIT             NOT NULL
+        CONSTRAINT DF_Results_IsPublished DEFAULT (0),
+    RecordedAt          DATETIME2       NOT NULL
+        CONSTRAINT DF_Results_RecordedAt DEFAULT (SYSUTCDATETIME()),
+
+    CONSTRAINT PK_Results                   PRIMARY KEY (ResultId),
+    CONSTRAINT UQ_Results_EnrolmentId       UNIQUE (EnrolmentId),
+    CONSTRAINT CK_Results_FinishTime        CHECK (FinishTime > '00:00:00'),
+    CONSTRAINT CK_Results_FinishPosition    CHECK (FinishPosition > 0),
+    CONSTRAINT FK_Results_Enrolments        FOREIGN KEY (EnrolmentId)
+        REFERENCES dbo.Enrolments (EnrolmentId) ON DELETE CASCADE
+);
+GO
+
+PRINT 'STEP 7 complete: Results created';
+GO
+
+
