@@ -1,0 +1,81 @@
+---
+title: RaceDay - Entity Relationship Diagram
+---
+erDiagram
+    %% Matches docs/RaceDay_Database.sql exactly (CI checks this on every push)
+    %% Crow's foot notation:  || exactly one   o{ zero or many   o| zero or one
+    %% Every attribute is NOT NULL unless its comment says "nullable"
+
+    Users      }o--|| Roles      : "has"
+    Users      ||--o{ Events     : "organises (Organiser)"
+    Events     }o--|| EventTypes : "is a"
+    Categories }o--|| Events     : "belongs to"
+    Users      ||--o{ Enrolments : "makes (Participant)"
+    Events     ||--o{ Enrolments : "receives"
+    Categories ||--o{ Enrolments : "chosen in"
+    Enrolments ||--o| Results    : "earns"
+
+    Roles {
+        int RoleId PK
+        nvarchar(20) RoleName UK "Organiser or Participant"
+    }
+
+    EventTypes {
+        int EventTypeId PK
+        nvarchar(20) TypeName UK "Run, Walk, Cycle"
+    }
+
+    Users {
+        int UserId PK
+        int RoleId FK
+        nvarchar(50) FirstName
+        nvarchar(50) LastName
+        nvarchar(256) Email UK "login name"
+        nvarchar(255) PasswordHash "BCrypt hash"
+        nvarchar(20) PhoneNumber "nullable"
+        date DateOfBirth "nullable, in the past"
+        nvarchar(500) ProfilePictureUrl "nullable, Azure Blob URL"
+        datetime2 CreatedAt "default now (UTC)"
+    }
+
+    Events {
+        int EventId PK
+        int OrganiserId FK "Users.UserId"
+        int EventTypeId FK
+        nvarchar(150) Name
+        nvarchar(2000) Description
+        datetime2 EventDate "date and start time"
+        nvarchar(200) Location
+        decimal DistanceKm "decimal(6,2), above 0"
+        nvarchar(500) BannerImageUrl "nullable, Azure Blob URL"
+        datetime2 CreatedAt "default now (UTC)"
+    }
+
+    Categories {
+        int CategoryId PK
+        int EventId FK "unique together with Name"
+        nvarchar(100) Name
+        nvarchar(10) CategoryType "Age or Distance"
+        int MinAge "nullable"
+        int MaxAge "nullable"
+        decimal DistanceKm "nullable, decimal(6,2)"
+        int MaxParticipants "nullable = no limit"
+    }
+
+    Enrolments {
+        int EnrolmentId PK
+        int ParticipantId FK "Users.UserId, unique with EventId"
+        int EventId FK
+        int CategoryId FK
+        nvarchar(20) Status "Pending, Confirmed, Cancelled (default Pending)"
+        datetime2 EnrolledAt "default now (UTC)"
+    }
+
+    Results {
+        int ResultId PK
+        int EnrolmentId FK, UK "one result per enrolment"
+        time(0) FinishTime "hh:mm:ss"
+        int FinishPosition "above 0"
+        bit IsPublished "default 0"
+        datetime2 RecordedAt "default now (UTC)"
+    }
