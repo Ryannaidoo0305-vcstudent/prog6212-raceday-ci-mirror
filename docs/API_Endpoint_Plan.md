@@ -371,3 +371,92 @@ flowchart TD
     F -->|"after race day"| H["My results (28)"]
 ```
 
+## 7. Enrolment status lifecycle
+
+Every entry starts as **Pending** (the database default) and only an organiser can confirm it. Only **Confirmed** entries can receive a result.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Pending : Participant enters (19)
+    Pending --> Confirmed : Organiser confirms (23)
+    Pending --> Cancelled : Participant withdraws (21) or organiser cancels (23)
+    Confirmed --> Cancelled : Participant withdraws (21) or organiser cancels (23)
+    Cancelled --> Pending : Organiser reinstates (23)
+    Confirmed --> [*] : Result captured (24) and published (26)
+```
+
+Cancelled entries are kept rather than deleted, so the organiser can still see who withdrew. They keep their place in `UQ_Enrolments_Participant_Event`, so a participant who withdraws is reinstated by the organiser rather than entering twice.
+
+## 8. Endpoint to table traceability
+
+Which tables each endpoint reads and writes. Every one of the 7 tables is used, and every endpoint maps onto the ERD.
+
+| # | Endpoint | Reads | Writes |
+|---|---|---|---|
+| 1 | `POST /api/auth/register` | Roles, Users (email check) | Users |
+| 2 | `POST /api/auth/login` | Users, Roles | Session only |
+| 3 | `POST /api/auth/logout` | - | Session only |
+| 4 | `GET /api/users/me` | Users, Roles | - |
+| 5 | `PUT /api/users/me` | Users | Users |
+| 6 | `POST /api/users/me/profile-picture` | Users | Users.ProfilePictureUrl, Azure Blob Storage |
+| 7 | `GET /api/event-types` | EventTypes | - |
+| 8 | `GET /api/events` | Events, EventTypes | - |
+| 9 | `GET /api/events/{id}` | Events, EventTypes, Users, Categories, Enrolments | - |
+| 10 | `GET /api/events/mine` | Events, EventTypes, Enrolments | - |
+| 11 | `POST /api/events` | EventTypes | Events |
+| 12 | `PUT /api/events/{id}` | Events, EventTypes | Events |
+| 13 | `DELETE /api/events/{id}` | Events, Enrolments | Events, Categories (cascade) |
+| 14 | `POST /api/events/{id}/banner` | Events | Events.BannerImageUrl, Azure Blob Storage |
+| 15 | `GET /api/events/{eventId}/categories` | Categories, Enrolments | - |
+| 16 | `POST /api/events/{eventId}/categories` | Events, Categories | Categories |
+| 17 | `PUT /api/categories/{id}` | Categories, Events | Categories |
+| 18 | `DELETE /api/categories/{id}` | Categories, Events, Enrolments | Categories |
+| 19 | `POST /api/events/{eventId}/enrolments` | Events, Categories, Users, Enrolments | Enrolments |
+| 20 | `GET /api/enrolments/mine` | Enrolments, Events, Categories | - |
+| 21 | `PUT /api/enrolments/{id}/cancel` | Enrolments, Events | Enrolments.Status |
+| 22 | `GET /api/events/{eventId}/enrolments` | Events, Enrolments, Users, Categories, Results | - |
+| 23 | `PUT /api/enrolments/{id}/status` | Enrolments, Events | Enrolments.Status |
+| 24 | `POST /api/events/{eventId}/results` | Events, Enrolments, Results | Results |
+| 25 | `PUT /api/results/{id}` | Results, Enrolments, Events | Results |
+| 26 | `PUT /api/events/{eventId}/results/publish` | Events, Enrolments, Results | Results.IsPublished |
+| 27 | `GET /api/events/{eventId}/results` | Events, Enrolments, Results, Users, Categories | - |
+| 28 | `GET /api/results/mine` | Results, Enrolments, Events, Categories | - |
+
+## 9. Business rules behind the failure codes
+
+| Rule | Enforced by |
+|---|---|
+| The role is chosen at registration, must be Organiser or Participant, and can never be changed through the API. | #1, #5; database: `CK_Roles_RoleName` |
+| Passwords need at least 8 characters with an uppercase letter, a lowercase letter and a digit, and are stored only as a BCrypt hash. | #1, #2 |
+| Organisers can only manage their own events and everything under them (categories, enrolments, results). | #12-#14, #16-#18, #22-#27 (403) |
+| A participant can enter an event only once. | #19 (409); database: `UQ_Enrolments_Participant_Event` |
+| The chosen category must belong to the event, must have space left and, for age categories, must fit the participant's age on race day. | #19 (400 / 409) |
+| New entries start as Pending and the organiser confirms them. | #19, #23; database: `DF_Enrolments_Status`, `CK_Enrolments_Status` |
+| Results can only be captured after the event, only for Confirmed entries, once per entry, and each finishing position is used once per event. | #24, #25; database: `UQ_Results_EnrolmentId` |
+| Participants only ever see their own, published results. | #28 |
+| Events and categories that already have entries cannot be deleted. | #13, #18 (409); database: `ON DELETE NO ACTION` |
+| "Out of N finishers" is calculated from the results, not stored, so it can never go out of date. | #28 |
+
+## 10. Requirement coverage
+
+| Part 2 functional requirement | Endpoints |
+|---|---|
+| Authentication - register and log in based on role | #1, #2, #3 |
+| User Profile - both roles view and update their own profile | #4, #5 (+ #6 in Part 3) |
+| Events - Organisers create, update and delete; both roles view; name, description, date, location, distance and type captured | #7-#13 (+ #14 in Part 3) |
+| Categories - Organisers define age or distance categories; both roles view them | #15-#18 |
+| Event Enrolments - Participants enter by choosing a category; participant, event and category recorded; Organisers view enrolments for their events | #19-#23 |
+| Results - Organisers capture finish times and positions; Participants view their own | #24-#28 |
+| Planned early for Part 3 - Organiser dashboard, event banner and profile picture uploads | #10, #14, #6 |
+
+## 11. Out of scope
+
+The brief's background mentions live weather and route information for race day. Neither is required in Parts 1 to 3, so no endpoints are planned for them. They remain possible future enhancements (for example, a weather lookup for an event's location and date).
+
+## Reference list
+
+Harvard Anglia style.
+
+Fielding, R., Nottingham, M. and Reschke, J. 2022. *HTTP semantics*. RFC 9110. [Online]. Available at: https://www.rfc-editor.org/rfc/rfc9110 [Accessed 28 September 2026].
+
+Nottingham, M., Wilde, E. and Dalal, S. 2023. *Problem details for HTTP APIs*. RFC 9457. [Online]. Available at: https://www.rfc-editor.org/rfc/rfc9457 [Accessed 28 September 2026].
