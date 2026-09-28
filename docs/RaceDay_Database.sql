@@ -493,3 +493,73 @@ PRINT 'STEP 12 complete: 10 enrolments and 5 results seeded';
 GO
 
 
+-- =====================================================================
+-- STEP 13: Verification - row counts, previews of real app screens and
+--          the data dictionary read straight from SQL Server
+-- =====================================================================
+
+-- Rows per table
+SELECT 'Roles' AS TableName, COUNT(*) AS TotalRows FROM dbo.Roles
+UNION ALL SELECT 'EventTypes', COUNT(*) FROM dbo.EventTypes
+UNION ALL SELECT 'Users',      COUNT(*) FROM dbo.Users
+UNION ALL SELECT 'Events',     COUNT(*) FROM dbo.Events
+UNION ALL SELECT 'Categories', COUNT(*) FROM dbo.Categories
+UNION ALL SELECT 'Enrolments', COUNT(*) FROM dbo.Enrolments
+UNION ALL SELECT 'Results',    COUNT(*) FROM dbo.Results;
+
+-- Users per role (the brief needs at least 2 Organisers and 2 Participants)
+SELECT r.RoleName, COUNT(u.UserId) AS TotalUsers
+FROM dbo.Roles r
+LEFT JOIN dbo.Users u ON u.RoleId = r.RoleId
+GROUP BY r.RoleName;
+
+-- Organiser dashboard preview: enrolments per event
+SELECT  o.FirstName + N' ' + o.LastName                              AS Organiser,
+        e.Name                                                        AS EventName,
+        e.EventDate,
+        SUM(CASE WHEN en.Status = N'Confirmed' THEN 1 ELSE 0 END)     AS Confirmed,
+        SUM(CASE WHEN en.Status = N'Pending'   THEN 1 ELSE 0 END)     AS Pending,
+        SUM(CASE WHEN en.Status = N'Cancelled' THEN 1 ELSE 0 END)     AS Cancelled,
+        COUNT(en.EnrolmentId)                                         AS TotalEnrolments
+FROM dbo.Events e
+JOIN dbo.Users o            ON o.UserId   = e.OrganiserId
+LEFT JOIN dbo.Enrolments en ON en.EventId = e.EventId
+GROUP BY e.EventId, o.FirstName, o.LastName, e.Name, e.EventDate
+ORDER BY e.EventDate;
+
+-- Participant "My Results" preview: position out of total finishers
+SELECT  u.FirstName + N' ' + u.LastName             AS Participant,
+        e.Name                                      AS EventName,
+        CAST(e.EventDate AS DATE)                   AS EventDate,
+        c.Name                                      AS Category,
+        r.FinishTime,
+        r.FinishPosition,
+        COUNT(*) OVER (PARTITION BY en.EventId)     AS TotalFinishers
+FROM dbo.Results r
+JOIN dbo.Enrolments en ON en.EnrolmentId = r.EnrolmentId
+JOIN dbo.Users      u  ON u.UserId       = en.ParticipantId
+JOIN dbo.Events     e  ON e.EventId      = en.EventId
+JOIN dbo.Categories c  ON c.CategoryId   = en.CategoryId
+WHERE r.IsPublished = 1
+ORDER BY e.EventDate, r.FinishPosition;
+
+-- Data dictionary straight from SQL Server (descriptions stored in STEP 9)
+SELECT  t.name                                              AS TableName,
+        c.name                                              AS ColumnName,
+        UPPER(ty.name) + CASE
+            WHEN ty.name IN (N'nvarchar', N'nchar')   THEN N'(' + CAST(c.max_length / 2 AS NVARCHAR(10)) + N')'
+            WHEN ty.name IN (N'decimal', N'numeric')  THEN N'(' + CAST(c.precision AS NVARCHAR(10)) + N',' + CAST(c.scale AS NVARCHAR(10)) + N')'
+            WHEN ty.name = N'time'                    THEN N'(' + CAST(c.scale AS NVARCHAR(10)) + N')'
+            ELSE N'' END                                    AS DataType,
+        CASE WHEN c.is_nullable = 1 THEN N'Yes' ELSE N'No' END AS AllowsNull,
+        CAST(ep.value AS NVARCHAR(400))                     AS Description
+FROM sys.tables t
+JOIN sys.columns c  ON c.object_id     = t.object_id
+JOIN sys.types   ty ON ty.user_type_id = c.user_type_id
+LEFT JOIN sys.extended_properties ep
+       ON ep.class = 1 AND ep.major_id = c.object_id AND ep.minor_id = c.column_id
+      AND ep.name = N'MS_Description'
+ORDER BY t.name, c.column_id;
+
+PRINT 'STEP 13 complete: RaceDayDB created and seeded successfully';
+GO
