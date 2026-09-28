@@ -400,3 +400,55 @@ PRINT 'STEP 10 complete: roles, event types and 7 users seeded';
 GO
 
 
+-- =====================================================================
+-- STEP 11: Seed data - events and their categories
+--   Event 1 is in the past (it has results). Events 2-4 are upcoming.
+-- =====================================================================
+BEGIN TRANSACTION;
+
+SET IDENTITY_INSERT dbo.Events ON;
+INSERT INTO dbo.Events
+    (EventId, OrganiserId, EventTypeId, Name, Description, EventDate, Location, DistanceKm, BannerImageUrl, CreatedAt)
+VALUES
+    (1, 1, 1, N'Jozi Sunrise Half Marathon',
+        N'A fast 21.1km road race through the tree-lined northern suburbs, starting and finishing at Zoo Lake. Water tables every 3km and a 3h30 cut-off.',
+        '2026-08-23T06:00:00', N'Zoo Lake, Parkview, Johannesburg', 21.10, NULL, '2026-05-10T09:00:00'),
+    (2, 2, 3, N'Hartbeespoort Cycle Classic',
+        N'A scenic road cycling classic around the Hartbeespoort Dam with 100km, 60km and 30km route options, rolling road closures and a finish-line festival.',
+        '2027-03-14T06:30:00', N'Hartbeespoort Dam, North West', 100.00, NULL, '2026-06-01T12:00:00'),
+    (3, 2, 2, N'Durban Beachfront Charity Walk',
+        N'A relaxed family walk along the Golden Mile promenade raising funds for local children''s charities. Dogs on leads welcome.',
+        '2027-02-07T07:00:00', N'uShaka Beach, Durban', 8.00, NULL, '2026-06-15T14:30:00'),
+    (4, 1, 1, N'Soweto Heritage 10K',
+        N'A 10km road race past Vilakazi Street and other Soweto landmarks, finishing inside Orlando Stadium.',
+        '2027-04-25T06:30:00', N'Orlando Stadium, Soweto', 10.00, NULL, '2026-07-01T08:00:00');
+SET IDENTITY_INSERT dbo.Events OFF;
+
+SET IDENTITY_INSERT dbo.Categories ON;
+INSERT INTO dbo.Categories
+    (CategoryId, EventId, Name, CategoryType, MinAge, MaxAge, DistanceKm, MaxParticipants)
+VALUES
+    -- Event 1: Jozi Sunrise Half Marathon (age categories)
+    (1,  1, N'Junior (Under 20)', N'Age',      16,   19,   NULL,   300),
+    (2,  1, N'Senior (20-39)',    N'Age',      20,   39,   NULL,   1500),
+    (3,  1, N'Veteran (40-49)',   N'Age',      40,   49,   NULL,   800),
+    (4,  1, N'Master (50+)',      N'Age',      50,   NULL, NULL,   800),
+    -- Event 2: Hartbeespoort Cycle Classic (distance categories)
+    (5,  2, N'100km Classic',     N'Distance', NULL, NULL, 100.00, 1000),
+    (6,  2, N'60km Challenge',    N'Distance', NULL, NULL, 60.00,  800),
+    (7,  2, N'30km Fun Ride',     N'Distance', NULL, NULL, 30.00,  NULL),
+    -- Event 3: Durban Beachfront Charity Walk (distance categories)
+    (8,  3, N'8km Charity Walk',  N'Distance', NULL, NULL, 8.00,   NULL),
+    (9,  3, N'4km Family Walk',   N'Distance', NULL, NULL, 4.00,   NULL),
+    -- Event 4: Soweto Heritage 10K (age categories)
+    (10, 4, N'Junior (Under 20)', N'Age',      13,   19,   NULL,   400),
+    (11, 4, N'Senior (20-39)',    N'Age',      20,   39,   NULL,   2000),
+    (12, 4, N'Veteran (40-49)',   N'Age',      40,   49,   NULL,   1000),
+    (13, 4, N'Master (50+)',      N'Age',      50,   NULL, NULL,   1000);
+SET IDENTITY_INSERT dbo.Categories OFF;
+
+COMMIT TRANSACTION;
+PRINT 'STEP 11 complete: 4 events and 13 categories seeded';
+GO
+
+
