@@ -172,3 +172,34 @@ PRINT 'STEP 5 complete: Categories created';
 GO
 
 
+-- =====================================================================
+-- STEP 6: Enrolments - the bridge (associative) table that resolves the
+--         many-to-many relationship between Participants and Events
+-- =====================================================================
+CREATE TABLE dbo.Enrolments
+(
+    EnrolmentId         INT             IDENTITY(1,1)  NOT NULL,
+    ParticipantId       INT             NOT NULL,   -- the Participant (Users.UserId) who entered
+    EventId             INT             NOT NULL,   -- kept so the database itself can block double entries
+    CategoryId          INT             NOT NULL,   -- the category the Participant selected
+    Status              NVARCHAR(20)    NOT NULL
+        CONSTRAINT DF_Enrolments_Status DEFAULT (N'Pending'),
+    EnrolledAt          DATETIME2       NOT NULL
+        CONSTRAINT DF_Enrolments_EnrolledAt DEFAULT (SYSUTCDATETIME()),
+
+    CONSTRAINT PK_Enrolments                    PRIMARY KEY (EnrolmentId),
+    CONSTRAINT UQ_Enrolments_Participant_Event  UNIQUE (ParticipantId, EventId),
+    CONSTRAINT CK_Enrolments_Status             CHECK (Status IN (N'Pending', N'Confirmed', N'Cancelled')),
+    CONSTRAINT FK_Enrolments_Participant        FOREIGN KEY (ParticipantId)
+        REFERENCES dbo.Users (UserId) ON DELETE NO ACTION,
+    CONSTRAINT FK_Enrolments_Events             FOREIGN KEY (EventId)
+        REFERENCES dbo.Events (EventId) ON DELETE NO ACTION,
+    CONSTRAINT FK_Enrolments_Categories         FOREIGN KEY (CategoryId)
+        REFERENCES dbo.Categories (CategoryId) ON DELETE NO ACTION
+);
+GO
+
+PRINT 'STEP 6 complete: Enrolments created';
+GO
+
+
