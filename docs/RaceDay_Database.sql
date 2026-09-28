@@ -111,3 +111,33 @@ PRINT 'STEP 3 complete: Users created';
 GO
 
 
+-- =====================================================================
+-- STEP 4: Events - each event is created and owned by one Organiser
+-- =====================================================================
+CREATE TABLE dbo.Events
+(
+    EventId             INT             IDENTITY(1,1)  NOT NULL,
+    OrganiserId         INT             NOT NULL,   -- the Organiser (Users.UserId) who owns the event
+    EventTypeId         INT             NOT NULL,
+    Name                NVARCHAR(150)   NOT NULL,
+    Description         NVARCHAR(2000)  NOT NULL,
+    EventDate           DATETIME2       NOT NULL,   -- race date and start time
+    Location            NVARCHAR(200)   NOT NULL,
+    DistanceKm          DECIMAL(6,2)    NOT NULL,   -- main (longest) distance, e.g. 21.10
+    BannerImageUrl      NVARCHAR(500)   NULL,       -- Azure Blob Storage URL (Part 3)
+    CreatedAt           DATETIME2       NOT NULL
+        CONSTRAINT DF_Events_CreatedAt DEFAULT (SYSUTCDATETIME()),
+
+    CONSTRAINT PK_Events            PRIMARY KEY (EventId),
+    CONSTRAINT CK_Events_DistanceKm CHECK (DistanceKm > 0),
+    CONSTRAINT FK_Events_Organiser  FOREIGN KEY (OrganiserId)
+        REFERENCES dbo.Users (UserId) ON DELETE NO ACTION,
+    CONSTRAINT FK_Events_EventTypes FOREIGN KEY (EventTypeId)
+        REFERENCES dbo.EventTypes (EventTypeId) ON DELETE NO ACTION
+);
+GO
+
+PRINT 'STEP 4 complete: Events created';
+GO
+
+
