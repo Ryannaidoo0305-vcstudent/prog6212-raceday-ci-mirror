@@ -48,3 +48,36 @@ PRINT 'STEP 1 complete: RaceDayDB created';
 GO
 
 
+-- =====================================================================
+-- STEP 2: Lookup tables - Roles and EventTypes
+-- =====================================================================
+
+-- Roles: the only two roles RaceDay supports.
+-- The CHECK constraint means no other role (e.g. "Admin") can ever be added.
+CREATE TABLE dbo.Roles
+(
+    RoleId          INT             IDENTITY(1,1)  NOT NULL,
+    RoleName        NVARCHAR(20)    NOT NULL,
+
+    CONSTRAINT PK_Roles             PRIMARY KEY (RoleId),
+    CONSTRAINT UQ_Roles_RoleName    UNIQUE (RoleName),
+    CONSTRAINT CK_Roles_RoleName    CHECK (RoleName IN (N'Organiser', N'Participant'))
+);
+GO
+
+-- EventTypes: Run, Walk or Cycle. A table (not hard-coded text) so a new
+-- type such as "Trail Run" can be added later without changing the schema.
+CREATE TABLE dbo.EventTypes
+(
+    EventTypeId     INT             IDENTITY(1,1)  NOT NULL,
+    TypeName        NVARCHAR(20)    NOT NULL,
+
+    CONSTRAINT PK_EventTypes            PRIMARY KEY (EventTypeId),
+    CONSTRAINT UQ_EventTypes_TypeName   UNIQUE (TypeName)
+);
+GO
+
+PRINT 'STEP 2 complete: Roles and EventTypes created';
+GO
+
+
