@@ -141,3 +141,34 @@ PRINT 'STEP 4 complete: Events created';
 GO
 
 
+-- =====================================================================
+-- STEP 5: Categories - age or distance categories for each event
+-- =====================================================================
+CREATE TABLE dbo.Categories
+(
+    CategoryId          INT             IDENTITY(1,1)  NOT NULL,
+    EventId             INT             NOT NULL,
+    Name                NVARCHAR(100)   NOT NULL,   -- e.g. 'Senior (20-39)' or '30km Fun Ride'
+    CategoryType        NVARCHAR(10)    NOT NULL,   -- 'Age' or 'Distance'
+    MinAge              INT             NULL,       -- Age categories only
+    MaxAge              INT             NULL,       -- Age categories only (NULL = no upper limit)
+    DistanceKm          DECIMAL(6,2)    NULL,       -- Distance categories only
+    MaxParticipants     INT             NULL,       -- entry limit (NULL = unlimited)
+
+    CONSTRAINT PK_Categories                    PRIMARY KEY (CategoryId),
+    CONSTRAINT UQ_Categories_Event_Name         UNIQUE (EventId, Name),
+    CONSTRAINT CK_Categories_CategoryType       CHECK (CategoryType IN (N'Age', N'Distance')),
+    CONSTRAINT CK_Categories_AgeRange           CHECK (MinAge IS NULL OR MaxAge IS NULL OR MinAge <= MaxAge),
+    CONSTRAINT CK_Categories_AgeNeedsLimit      CHECK (CategoryType <> N'Age' OR MinAge IS NOT NULL OR MaxAge IS NOT NULL),
+    CONSTRAINT CK_Categories_DistanceNeedsKm    CHECK (CategoryType <> N'Distance' OR DistanceKm IS NOT NULL),
+    CONSTRAINT CK_Categories_DistanceKm         CHECK (DistanceKm IS NULL OR DistanceKm > 0),
+    CONSTRAINT CK_Categories_MaxParticipants    CHECK (MaxParticipants IS NULL OR MaxParticipants > 0),
+    CONSTRAINT FK_Categories_Events             FOREIGN KEY (EventId)
+        REFERENCES dbo.Events (EventId) ON DELETE CASCADE
+);
+GO
+
+PRINT 'STEP 5 complete: Categories created';
+GO
+
+
