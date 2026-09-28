@@ -452,3 +452,44 @@ PRINT 'STEP 11 complete: 4 events and 13 categories seeded';
 GO
 
 
+-- =====================================================================
+-- STEP 12: Seed data - enrolments and results
+--   DEFAULT inside VALUES uses the column's DEFAULT constraint
+--   (here Status = 'Pending').
+-- =====================================================================
+BEGIN TRANSACTION;
+
+SET IDENTITY_INSERT dbo.Enrolments ON;
+INSERT INTO dbo.Enrolments
+    (EnrolmentId, ParticipantId, EventId, CategoryId, Status, EnrolledAt)
+VALUES
+    -- Event 1 (finished): everyone confirmed and finished
+    (1,  3, 1, 2,  N'Confirmed', '2026-06-02T19:45:00'),   -- Sipho  - Senior
+    (2,  7, 1, 1,  N'Confirmed', '2026-06-05T12:10:00'),   -- Kabelo - Junior
+    (3,  5, 1, 3,  N'Confirmed', '2026-06-11T07:30:00'),   -- Lerato - Veteran
+    (4,  4, 1, 2,  N'Confirmed', '2026-06-20T21:05:00'),   -- Aisha  - Senior
+    (5,  6, 1, 4,  N'Confirmed', '2026-07-01T06:50:00'),   -- Johan  - Master
+    -- Upcoming events: a mix of statuses
+    (6,  6, 2, 5,  N'Confirmed', '2026-08-30T10:00:00'),   -- Johan  - 100km Classic
+    (7,  4, 2, 7,  DEFAULT,      '2026-09-12T16:20:00'),   -- Aisha  - 30km Fun Ride (Pending)
+    (8,  5, 3, 8,  N'Confirmed', '2026-09-03T18:00:00'),   -- Lerato - 8km Charity Walk
+    (9,  3, 4, 11, DEFAULT,      '2026-09-20T20:15:00'),   -- Sipho  - Senior 10K (Pending)
+    (10, 7, 4, 10, N'Cancelled', '2026-09-08T13:40:00');   -- Kabelo - Junior 10K (withdrew)
+SET IDENTITY_INSERT dbo.Enrolments OFF;
+
+SET IDENTITY_INSERT dbo.Results ON;
+INSERT INTO dbo.Results
+    (ResultId, EnrolmentId, FinishTime, FinishPosition, IsPublished, RecordedAt)
+VALUES
+    (1, 1, '01:21:37', 1, 1, '2026-08-23T13:30:00'),   -- Sipho
+    (2, 2, '01:29:05', 2, 1, '2026-08-23T13:30:00'),   -- Kabelo
+    (3, 3, '01:47:52', 3, 1, '2026-08-23T13:30:00'),   -- Lerato
+    (4, 4, '01:58:14', 4, 1, '2026-08-23T13:30:00'),   -- Aisha
+    (5, 5, '02:11:40', 5, 1, '2026-08-23T13:30:00');   -- Johan
+SET IDENTITY_INSERT dbo.Results OFF;
+
+COMMIT TRANSACTION;
+PRINT 'STEP 12 complete: 10 enrolments and 5 results seeded';
+GO
+
+
