@@ -248,3 +248,113 @@ PRINT 'STEP 8 complete: indexes created';
 GO
 
 
+-- =====================================================================
+-- STEP 9: Describe every table and column inside SQL Server
+--   Saved as MS_Description extended properties, so SSMS shows them
+--   (right-click a column > Properties > Extended Properties) and CI can
+--   check docs/Data_Dictionary.md against them. In Part 2, EF Core's
+--   HasComment() creates exactly the same properties.
+-- =====================================================================
+DECLARE @Descriptions TABLE
+(
+    Id              INT             IDENTITY(1,1) PRIMARY KEY,
+    TableName       SYSNAME         NOT NULL,
+    ColumnName      SYSNAME         NULL,       -- NULL = describes the table itself
+    Description     NVARCHAR(400)   NOT NULL
+);
+
+INSERT INTO @Descriptions (TableName, ColumnName, Description)
+VALUES
+    (N'Roles',      NULL,                   N'The two user roles RaceDay supports: Organiser and Participant.'),
+    (N'Roles',      N'RoleId',              N'Primary key (identity).'),
+    (N'Roles',      N'RoleName',            N'Role name: Organiser or Participant. Unique.'),
+
+    (N'EventTypes', NULL,                   N'Kinds of event: Run, Walk or Cycle.'),
+    (N'EventTypes', N'EventTypeId',         N'Primary key (identity).'),
+    (N'EventTypes', N'TypeName',            N'Event type name: Run, Walk or Cycle. Unique.'),
+
+    (N'Users',      NULL,                   N'Everyone who can log in. Organisers and Participants share this table and are told apart by RoleId.'),
+    (N'Users',      N'UserId',              N'Primary key (identity).'),
+    (N'Users',      N'RoleId',              N'Role of the user (FK to Roles). Chosen once at registration.'),
+    (N'Users',      N'FirstName',           N'First name.'),
+    (N'Users',      N'LastName',            N'Surname.'),
+    (N'Users',      N'Email',               N'Login name. Unique, ignoring letter case, and must look like an email address.'),
+    (N'Users',      N'PasswordHash',        N'BCrypt hash of the password. The plain-text password is never stored.'),
+    (N'Users',      N'PhoneNumber',         N'Contact number (optional).'),
+    (N'Users',      N'DateOfBirth',         N'Date of birth, used to check age categories. Must be in the past.'),
+    (N'Users',      N'ProfilePictureUrl',   N'Azure Blob Storage URL of the profile picture (added in Part 3).'),
+    (N'Users',      N'CreatedAt',           N'When the account was created (UTC).'),
+
+    (N'Events',     NULL,                   N'A run, walk or cycle event, created and owned by one Organiser.'),
+    (N'Events',     N'EventId',             N'Primary key (identity).'),
+    (N'Events',     N'OrganiserId',         N'The Organiser who owns the event (FK to Users).'),
+    (N'Events',     N'EventTypeId',         N'Run, Walk or Cycle (FK to EventTypes).'),
+    (N'Events',     N'Name',                N'Event name shown to participants.'),
+    (N'Events',     N'Description',         N'Full description of the event.'),
+    (N'Events',     N'EventDate',           N'Race date and start time.'),
+    (N'Events',     N'Location',            N'Venue or start location.'),
+    (N'Events',     N'DistanceKm',          N'Main (longest) distance in km. Must be above 0.'),
+    (N'Events',     N'BannerImageUrl',      N'Azure Blob Storage URL of the event banner (added in Part 3).'),
+    (N'Events',     N'CreatedAt',           N'When the event was created (UTC).'),
+
+    (N'Categories', NULL,                   N'An age or distance category that Participants choose when they enter an event.'),
+    (N'Categories', N'CategoryId',          N'Primary key (identity).'),
+    (N'Categories', N'EventId',             N'The event this category belongs to (FK to Events). Deleted with its event.'),
+    (N'Categories', N'Name',                N'Category name, unique within its event.'),
+    (N'Categories', N'CategoryType',        N'Age or Distance.'),
+    (N'Categories', N'MinAge',              N'Youngest age allowed on race day (Age categories).'),
+    (N'Categories', N'MaxAge',              N'Oldest age allowed on race day; empty means no upper limit (Age categories).'),
+    (N'Categories', N'DistanceKm',          N'Distance in km (Distance categories). Must be above 0.'),
+    (N'Categories', N'MaxParticipants',     N'Entry limit; empty means unlimited.'),
+
+    (N'Enrolments', NULL,                   N'An entry by a Participant into an event in a chosen category. Resolves the many-to-many between Users and Events.'),
+    (N'Enrolments', N'EnrolmentId',         N'Primary key (identity).'),
+    (N'Enrolments', N'ParticipantId',       N'The Participant who entered (FK to Users).'),
+    (N'Enrolments', N'EventId',             N'The event entered (FK to Events). One entry per participant per event.'),
+    (N'Enrolments', N'CategoryId',          N'The category chosen (FK to Categories).'),
+    (N'Enrolments', N'Status',              N'Pending, Confirmed or Cancelled. Starts as Pending.'),
+    (N'Enrolments', N'EnrolledAt',          N'When the entry was made (UTC).'),
+
+    (N'Results',    NULL,                   N'Finish time and position for one enrolment, captured by the Organiser after the event.'),
+    (N'Results',    N'ResultId',            N'Primary key (identity).'),
+    (N'Results',    N'EnrolmentId',         N'The entry this result belongs to (FK to Enrolments). One result per entry.'),
+    (N'Results',    N'FinishTime',          N'Finish time as hh:mm:ss. Must be above zero.'),
+    (N'Results',    N'FinishPosition',      N'Overall finishing position. Must be 1 or more.'),
+    (N'Results',    N'IsPublished',         N'1 once the Organiser publishes the results; participants only see published results.'),
+    (N'Results',    N'RecordedAt',          N'When the result was captured (UTC).');
+
+DECLARE @i      INT = 1,
+        @n      INT = (SELECT COUNT(*) FROM @Descriptions),
+        @table  SYSNAME,
+        @column SYSNAME,
+        @text   NVARCHAR(400);
+
+WHILE @i <= @n
+BEGIN
+    SELECT @table = TableName, @column = ColumnName, @text = Description
+    FROM @Descriptions
+    WHERE Id = @i;
+
+    IF @column IS NULL
+    BEGIN
+        EXEC sys.sp_addextendedproperty
+             @name = N'MS_Description', @value = @text,
+             @level0type = N'SCHEMA', @level0name = N'dbo',
+             @level1type = N'TABLE',  @level1name = @table;
+    END
+    ELSE
+    BEGIN
+        EXEC sys.sp_addextendedproperty
+             @name = N'MS_Description', @value = @text,
+             @level0type = N'SCHEMA', @level0name = N'dbo',
+             @level1type = N'TABLE',  @level1name = @table,
+             @level2type = N'COLUMN', @level2name = @column;
+    END;
+
+    SET @i += 1;
+END;
+
+PRINT CONCAT('STEP 9 complete: ', @n, ' table and column descriptions stored');
+GO
+
+
