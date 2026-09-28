@@ -130,3 +130,244 @@ The organiser's ID always comes from the session, never from the request body, s
 | 27 | GET | `/api/events/{eventId}/results` | Full results for one of the organiser's events (published and unpublished), ordered by position - used on the results entry page. | Organiser (owner) | None | **200 OK** - `[ { resultId, finishPosition, participantName, categoryName, finishTime, isPublished } ]`<br>**401 Unauthorized**<br>**403 Forbidden** - not the owner<br>**404 Not Found** |
 | 28 | GET | `/api/results/mine` | The participant's race history: published results only, with position out of total finishers (e.g. 47th of 312). | Participant | None | **200 OK** - `[ { eventName, eventDate, categoryName, finishTime, finishPosition, totalFinishers } ]`<br>**401 Unauthorized**<br>**403 Forbidden** - not a Participant |
 
+## 3. Role access matrix
+
+Who can call each endpoint. **owner** = only on events they created; **own** = only their own entry. Every "No" is refused with 401 (not logged in) or 403 (logged in with the wrong role).
+
+| # | Endpoint | Public | Organiser | Participant |
+|---|---|---|---|---|
+| 1 | `POST /api/auth/register` | Yes | Yes | Yes |
+| 2 | `POST /api/auth/login` | Yes | Yes | Yes |
+| 3 | `POST /api/auth/logout` | No | Yes | Yes |
+| 4 | `GET /api/users/me` | No | Yes | Yes |
+| 5 | `PUT /api/users/me` | No | Yes | Yes |
+| 6 | `POST /api/users/me/profile-picture` | No | Yes | Yes |
+| 7 | `GET /api/event-types` | No | Yes | Yes |
+| 8 | `GET /api/events` | No | Yes | Yes |
+| 9 | `GET /api/events/{id}` | No | Yes | Yes |
+| 10 | `GET /api/events/mine` | No | Yes | No |
+| 11 | `POST /api/events` | No | Yes | No |
+| 12 | `PUT /api/events/{id}` | No | owner | No |
+| 13 | `DELETE /api/events/{id}` | No | owner | No |
+| 14 | `POST /api/events/{id}/banner` | No | owner | No |
+| 15 | `GET /api/events/{eventId}/categories` | No | Yes | Yes |
+| 16 | `POST /api/events/{eventId}/categories` | No | owner | No |
+| 17 | `PUT /api/categories/{id}` | No | owner | No |
+| 18 | `DELETE /api/categories/{id}` | No | owner | No |
+| 19 | `POST /api/events/{eventId}/enrolments` | No | No | Yes |
+| 20 | `GET /api/enrolments/mine` | No | No | Yes |
+| 21 | `PUT /api/enrolments/{id}/cancel` | No | No | own |
+| 22 | `GET /api/events/{eventId}/enrolments` | No | owner | No |
+| 23 | `PUT /api/enrolments/{id}/status` | No | owner | No |
+| 24 | `POST /api/events/{eventId}/results` | No | owner | No |
+| 25 | `PUT /api/results/{id}` | No | owner | No |
+| 26 | `PUT /api/events/{eventId}/results/publish` | No | owner | No |
+| 27 | `GET /api/events/{eventId}/results` | No | owner | No |
+| 28 | `GET /api/results/mine` | No | No | Yes |
+
+**Totals:** 2 public, 8 for any logged-in user, 14 Organiser-only (12 of them owner-only) and 4 Participant-only.
+
+## 4. Request field rules
+
+The API validates every request body with these rules (data annotations in Part 2) and returns **400 Bad Request** with the failing field names when one is broken. The limits match the database columns, and the last column links each rule to the database, so bad data is stopped twice.
+
+**Register (#1) and update profile (#5).** Update profile accepts only firstName, lastName, phoneNumber and dateOfBirth.
+
+| Field | Type | Required | Rules | Database |
+|---|---|---|---|---|
+| firstName | string | Yes | 1-50 characters | `Users.FirstName` NVARCHAR(50) |
+| lastName | string | Yes | 1-50 characters | `Users.LastName` NVARCHAR(50) |
+| email | string | Yes (#1 only) | Valid email, max 256 characters, not already registered (case ignored) | `UQ_Users_Email`, `CK_Users_Email` |
+| password | string | Yes (#1 only) | 8-100 characters with an uppercase letter, a lowercase letter and a digit | Stored only as a BCrypt hash in `Users.PasswordHash` |
+| role | string | Yes (#1 only) | `Organiser` or `Participant` | `Users.RoleId` to `Roles`, `CK_Roles_RoleName` |
+| phoneNumber | string | No | Max 20 characters | `Users.PhoneNumber` NVARCHAR(20) |
+| dateOfBirth | date | Participants only | In the past and after 1900-01-01 | `CK_Users_DateOfBirth` |
+
+**Login (#2):** `email` and `password`, both required.
+
+**Create or update an event (#11, #12)**
+
+| Field | Type | Required | Rules | Database |
+|---|---|---|---|---|
+| name | string | Yes | 3-150 characters | `Events.Name` NVARCHAR(150) |
+| description | string | Yes | 10-2000 characters | `Events.Description` NVARCHAR(2000) |
+| eventDate | date-time | Yes | In the future | `Events.EventDate` |
+| location | string | Yes | 3-200 characters | `Events.Location` NVARCHAR(200) |
+| distanceKm | decimal | Yes | 0.01-9999.99, up to 2 decimals | `CK_Events_DistanceKm`, DECIMAL(6,2) |
+| eventTypeId | int | Yes | Must exist (1 Run, 2 Walk, 3 Cycle) | `FK_Events_EventTypes` |
+
+**Create or update a category (#16, #17)**
+
+| Field | Type | Required | Rules | Database |
+|---|---|---|---|---|
+| name | string | Yes | 1-100 characters, unique within the event | `UQ_Categories_Event_Name` |
+| categoryType | string | Yes | `Age` or `Distance` | `CK_Categories_CategoryType` |
+| minAge, maxAge | int | Age: at least one | 0-120, and minAge not above maxAge | `CK_Categories_AgeRange`, `CK_Categories_AgeNeedsLimit` |
+| distanceKm | decimal | Distance: Yes | 0.01-9999.99 | `CK_Categories_DistanceKm`, `CK_Categories_DistanceNeedsKm` |
+| maxParticipants | int | No | 1 or more (leave out for unlimited) | `CK_Categories_MaxParticipants` |
+
+**Enrolments and results (#19, #23, #24, #25)**
+
+| Field | Type | Required | Rules | Database |
+|---|---|---|---|---|
+| categoryId (#19) | int | Yes | Must belong to the event in the route | `FK_Enrolments_Categories` |
+| status (#23) | string | Yes | `Pending`, `Confirmed` or `Cancelled` | `CK_Enrolments_Status` |
+| enrolmentId (#24) | int | Yes | A Confirmed entry in this event, with no result yet | `UQ_Results_EnrolmentId` |
+| finishTime (#24, #25) | string | Yes | `hh:mm:ss`, from 00:00:01 to 23:59:59 | `CK_Results_FinishTime`, TIME(0) |
+| finishPosition (#24, #25) | int | Yes | 1 or more, not already used in this event | `CK_Results_FinishPosition` |
+
+## 5. Example requests and responses
+
+The examples use the seed data from `RaceDay_Database.sql`, so the same values appear in the video demo.
+
+**Register a participant (#1)**
+
+```http
+POST /api/auth/register
+Content-Type: application/json
+
+{
+  "firstName": "Sipho",
+  "lastName": "Ndlovu",
+  "email": "sipho.ndlovu@example.com",
+  "password": "RaceDay@2026",
+  "role": "Participant",
+  "phoneNumber": "071 555 0103",
+  "dateOfBirth": "1994-03-12"
+}
+```
+
+```json
+HTTP/1.1 201 Created
+Location: /api/users/me
+
+{
+  "userId": 3,
+  "firstName": "Sipho",
+  "lastName": "Ndlovu",
+  "email": "sipho.ndlovu@example.com",
+  "role": "Participant",
+  "phoneNumber": "071 555 0103",
+  "dateOfBirth": "1994-03-12",
+  "profilePictureUrl": null,
+  "createdAt": "2026-05-20T19:05:00"
+}
+```
+
+**Log in (#2)** - the response sets the session cookie that every later request sends back.
+
+```json
+HTTP/1.1 200 OK
+Set-Cookie: .AspNetCore.Session=CfDJ8...; path=/; samesite=lax; httponly
+
+{
+  "userId": 3,
+  "fullName": "Sipho Ndlovu",
+  "email": "sipho.ndlovu@example.com",
+  "role": "Participant"
+}
+```
+
+**Create an event (#11)** - logged in as the organiser Thandi Mokoena.
+
+```http
+POST /api/events
+Content-Type: application/json
+
+{
+  "name": "Soweto Heritage 10K",
+  "description": "A 10km road race past Vilakazi Street and other Soweto landmarks, finishing inside Orlando Stadium.",
+  "eventDate": "2027-04-25T06:30:00",
+  "location": "Orlando Stadium, Soweto",
+  "distanceKm": 10.00,
+  "eventTypeId": 1
+}
+```
+
+Response: `201 Created` with `Location: /api/events/4` and the new event in the body.
+
+**Enter an event (#19)** - Sipho enters the Soweto Heritage 10K in the Senior category.
+
+```http
+POST /api/events/4/enrolments
+Content-Type: application/json
+
+{ "categoryId": 11 }
+```
+
+```json
+HTTP/1.1 201 Created
+Location: /api/enrolments/mine
+
+{
+  "enrolmentId": 9,
+  "eventId": 4,
+  "categoryId": 11,
+  "status": "Pending",
+  "enrolledAt": "2026-09-20T20:15:00"
+}
+```
+
+If Sipho sends the same request again, the plan's 409 applies:
+
+```json
+HTTP/1.1 409 Conflict
+Content-Type: application/problem+json
+
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "You have already entered Soweto Heritage 10K."
+}
+```
+
+**My results (#28)** - "position out of total finishers" is calculated when the request runs.
+
+```json
+HTTP/1.1 200 OK
+
+[
+  {
+    "eventName": "Jozi Sunrise Half Marathon",
+    "eventDate": "2026-08-23T06:00:00",
+    "categoryName": "Senior (20-39)",
+    "finishTime": "01:21:37",
+    "finishPosition": 1,
+    "totalFinishers": 5
+  }
+]
+```
+
+## 6. User journeys
+
+Each journey is a path through the endpoints above, so every screen in Part 3 already has an endpoint behind it. Numbers in brackets are endpoint numbers.
+
+**Organiser**
+
+```mermaid
+flowchart TD
+    A["Register (1)"] --> B["Log in (2)"]
+    B --> C["Dashboard (10)"]
+    C --> D["Create event (11)"]
+    D --> E["Add categories (16)"]
+    E --> F["Review entries (22)"]
+    F --> G["Confirm entries (23)"]
+    G --> H["Capture results (24)"]
+    H --> I["Publish results (26)"]
+    I --> C
+```
+
+**Participant**
+
+```mermaid
+flowchart TD
+    A["Register (1)"] --> B["Log in (2)"]
+    B --> C["Browse events (8)"]
+    C --> D["Event details (9)"]
+    D --> E["Enter in a category (19)"]
+    E --> F["My entries (20)"]
+    F -->|"changed my mind"| G["Withdraw (21)"]
+    F -->|"after race day"| H["My results (28)"]
+```
+
