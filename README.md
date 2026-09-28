@@ -12,7 +12,7 @@
 | **Module** | PROG6212 - Programming 2B (POE) |
 | **Student** | Ryan Naidoo - ST10487315 |
 | **Current part** | Part 1 - System Planning and Database |
-| **Video** | PASTE_YOUR_YOUTUBE_LINK_HERE |
+| **Video** | https://youtu.be/viBa_j2k-k4 |
 
 ## Contents
 
@@ -141,20 +141,22 @@ Every test runs inside a transaction that is rolled back, using `TRY...CATCH` (M
 
 Both jobs publish their results as tables on the run's **Summary** page.
 
+> **Note:** On 28 Sep 2026 GitHub would not start Actions jobs in the EMGPON classroom organisation because of an organisation billing limit. The screenshot below shows the same workflow passing on a private copy of this repository under my own GitHub account, and my lecturer has been notified.
+
 ![Successful CI build](docs/screenshots/part1-ci-green.png)
 
 ## Video presentation
 
-Part 1 walkthrough (unlisted YouTube): **PASTE_YOUR_YOUTUBE_LINK_HERE**
+Part 1 walkthrough (unlisted YouTube): **https://youtu.be/viBa_j2k-k4**
 
 | Time | Chapter |
 |---|---|
 | 0:00 | Introduction and repository tour |
-| 1:30 | ERD: entities, keys, cardinality and the many-to-many |
-| 4:00 | API endpoint plan: roles, sessions and failure codes |
-| 6:30 | SQL script run live in SSMS |
-| 8:30 | Constraint tests |
-| 9:15 | CI/CD pipeline |
+| 1:50 | ERD: entities, keys, cardinality and the many-to-many |
+| 3:40 | API endpoint plan: roles, sessions and failure codes |
+| 6:40 | SQL script run live in SSMS |
+| 7:30 | Constraint tests |
+| 8:20 | CI/CD pipeline |
 
 ## Repository structure
 
@@ -186,7 +188,7 @@ As required by the PoE instructions, I disclose that I used Claude (Anthropic, 2
 - the CI workflow and the consistency-check script;
 - the structure of this README.
 
-I added these files to this repository in stages rather than all at once: I built the SQL script one step at a time, running each step in SSMS before committing it, and added the endpoint plan section by section. I made my own changes (**describe them here**), and I can explain every table, constraint, endpoint and CI check - see the video.
+I added these files to this repository in stages rather than all at once: I built the SQL script one step at a time, running each step in SSMS before committing it, and added the endpoint plan section by section. I checked every step myself in SSMS and on GitHub, and I can explain every table, constraint, endpoint and CI check - see the video.
 
 ## Reference list
 
