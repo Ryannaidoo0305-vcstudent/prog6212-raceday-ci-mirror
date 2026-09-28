@@ -230,3 +230,21 @@ PRINT 'STEP 7 complete: Results created';
 GO
 
 
+-- =====================================================================
+-- STEP 8: Indexes on foreign key columns
+--   SQL Server does not index foreign keys automatically (EF Core does,
+--   by convention, in Part 2). Categories.EventId, Enrolments.ParticipantId
+--   and Results.EnrolmentId are already covered by their UNIQUE constraints.
+-- =====================================================================
+CREATE INDEX IX_Users_RoleId            ON dbo.Users (RoleId);
+CREATE INDEX IX_Events_OrganiserId      ON dbo.Events (OrganiserId);
+CREATE INDEX IX_Events_EventTypeId      ON dbo.Events (EventTypeId);
+CREATE INDEX IX_Events_EventDate        ON dbo.Events (EventDate);      -- fast "upcoming events" lists
+CREATE INDEX IX_Enrolments_EventId      ON dbo.Enrolments (EventId);
+CREATE INDEX IX_Enrolments_CategoryId   ON dbo.Enrolments (CategoryId);
+GO
+
+PRINT 'STEP 8 complete: indexes created';
+GO
+
+
