@@ -81,3 +81,33 @@ PRINT 'STEP 2 complete: Roles and EventTypes created';
 GO
 
 
+-- =====================================================================
+-- STEP 3: Users - one table for both Organisers and Participants
+-- =====================================================================
+CREATE TABLE dbo.Users
+(
+    UserId              INT             IDENTITY(1,1)  NOT NULL,
+    RoleId              INT             NOT NULL,
+    FirstName           NVARCHAR(50)    NOT NULL,
+    LastName            NVARCHAR(50)    NOT NULL,
+    Email               NVARCHAR(256)   NOT NULL,   -- used to log in
+    PasswordHash        NVARCHAR(255)   NOT NULL,   -- BCrypt hash, never the real password
+    PhoneNumber         NVARCHAR(20)    NULL,
+    DateOfBirth         DATE            NULL,       -- places Participants in age categories
+    ProfilePictureUrl   NVARCHAR(500)   NULL,       -- Azure Blob Storage URL (Part 3)
+    CreatedAt           DATETIME2       NOT NULL
+        CONSTRAINT DF_Users_CreatedAt DEFAULT (SYSUTCDATETIME()),
+
+    CONSTRAINT PK_Users             PRIMARY KEY (UserId),
+    CONSTRAINT UQ_Users_Email       UNIQUE (Email),
+    CONSTRAINT CK_Users_Email       CHECK (Email LIKE N'%_@_%._%'),
+    CONSTRAINT CK_Users_DateOfBirth CHECK (DateOfBirth IS NULL OR (DateOfBirth >= '1900-01-01' AND DateOfBirth < CAST(SYSUTCDATETIME() AS DATE))),
+    CONSTRAINT FK_Users_Roles       FOREIGN KEY (RoleId)
+        REFERENCES dbo.Roles (RoleId) ON DELETE NO ACTION
+);
+GO
+
+PRINT 'STEP 3 complete: Users created';
+GO
+
+
