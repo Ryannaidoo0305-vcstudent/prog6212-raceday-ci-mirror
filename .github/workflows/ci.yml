@@ -1,0 +1,162 @@
+# RaceDay CI - POE Part 1
+# Proves on every push that the planning documents are complete and agree with
+# each other, and that the database script really works on a brand-new SQL Server.
+#   Job 1  validate-docs  required files, endpoint plan structure, README sections,
+#                         and a cross-check of the ERD, data dictionary and SQL script
+#   Job 2  database       runs the SQL script twice on SQL Server 2022, checks the
+#                         seed data against the brief and runs the constraint tests
+# Both jobs write a results table to the run's Summary page.
+# Parts 2 and 3 will add jobs that build and test the API and the MVC app.
+
+name: RaceDay CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate-docs:
+    name: Validate /docs structure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Required Part 1 files exist
+        run: |
+          missing=0
+          for f in README.md \
+                   docs/RaceDay_ERD.png docs/RaceDay_ERD.pdf docs/RaceDay_ERD.mmd \
+                   docs/Data_Dictionary.md docs/API_Endpoint_Plan.md \
+                   docs/RaceDay_Database.sql docs/RaceDay_Constraint_Tests.sql; do
+            if [ -s "$f" ]; then echo "OK  $f"; else echo "::error::Missing or empty: $f"; missing=1; fi
+          done
+          exit $missing
+
+      - name: Endpoint plan has the six required columns and every resource
+        run: |
+          plan=docs/API_Endpoint_Plan.md
+          for text in "HTTP Method" "Route" "Description" "Role Required" "Request Body" "Expected Response" \
+                      "Authentication" "User Profile" "Events" "Categories" "Enrolments" "Results"; do
+            if grep -q "$text" "$plan"; then echo "OK  $text"; else echo "::error::Endpoint plan is missing: $text"; exit 1; fi
+          done
+          echo "Endpoints planned: $(grep -cE '^\| *[0-9]+ *\| *(GET|POST|PUT|PATCH|DELETE) ' "$plan")"
+
+      - name: README covers the roles, CI/CD and video
+        run: |
+          for text in "Organiser" "Participant" "CI/CD" "Video"; do
+            if grep -qi "$text" README.md; then echo "OK  $text"; else echo "::error::README is missing: $text"; exit 1; fi
+          done
+          grep -qE 'youtu(\.be|be\.com)/' README.md || echo "::warning::README has no YouTube link yet - add it before you submit"
+
+      - name: ERD, data dictionary and SQL script agree
+        run: python3 .github/scripts/check_docs_consistency.py
+
+  database:
+    name: Run SQL script on a clean SQL Server
+    needs: validate-docs
+    runs-on: ubuntu-latest
+    env:
+      # Throwaway password for a temporary CI container - not a real secret
+      SA_PASSWORD: RaceDay_CI_Pass_2026
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Start SQL Server 2022 (Linux container)
+        run: |
+          docker run -d --name sql -e ACCEPT_EULA=Y -e "MSSQL_SA_PASSWORD=$SA_PASSWORD" \
+            mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: Locate sqlcmd inside the container
+        run: |
+          if docker exec sql test -x /opt/mssql-tools18/bin/sqlcmd; then
+            echo "SQLCMD=/opt/mssql-tools18/bin/sqlcmd -C" >> "$GITHUB_ENV"
+          else
+            echo "SQLCMD=/opt/mssql-tools/bin/sqlcmd" >> "$GITHUB_ENV"
+          fi
+
+      - name: Wait for SQL Server to accept connections
+        run: |
+          for i in $(seq 1 40); do
+            if docker exec sql $SQLCMD -S localhost -U sa -P "$SA_PASSWORD" -Q "SELECT 1" > /dev/null 2>&1; then
+              echo "SQL Server is ready"; exit 0
+            fi
+            echo "Waiting for SQL Server ($i/40)..."; sleep 3
+          done
+          docker logs sql
+          echo "::error::SQL Server did not start in time"; exit 1
+
+      - name: Copy the scripts into the container
+        run: |
+          docker cp docs/RaceDay_Database.sql sql:/tmp/RaceDay_Database.sql
+          docker cp docs/RaceDay_Constraint_Tests.sql sql:/tmp/RaceDay_Constraint_Tests.sql
+
+      - name: Run RaceDay_Database.sql on the clean instance
+        run: docker exec sql $SQLCMD -S localhost -U sa -P "$SA_PASSWORD" -b -i /tmp/RaceDay_Database.sql
+
+      - name: Run it a second time (proves the script is re-runnable)
+        run: docker exec sql $SQLCMD -S localhost -U sa -P "$SA_PASSWORD" -b -i /tmp/RaceDay_Database.sql
+
+      - name: Check the seed data meets the brief
+        run: |
+          cat > verify_seed.sql <<'SQL'
+          SET NOCOUNT ON;
+          DECLARE @organisers   INT = (SELECT COUNT(*) FROM dbo.Users u JOIN dbo.Roles r ON r.RoleId = u.RoleId WHERE r.RoleName = N'Organiser');
+          DECLARE @participants INT = (SELECT COUNT(*) FROM dbo.Users u JOIN dbo.Roles r ON r.RoleId = u.RoleId WHERE r.RoleName = N'Participant');
+          DECLARE @events       INT = (SELECT COUNT(*) FROM dbo.Events);
+          DECLARE @enrolments   INT = (SELECT COUNT(*) FROM dbo.Enrolments);
+          PRINT CONCAT('Organisers: ', @organisers, ' | Participants: ', @participants, ' | Events: ', @events, ' | Enrolments: ', @enrolments);
+          IF @organisers < 2   THROW 50001, 'The brief needs at least 2 Organisers.', 1;
+          IF @participants < 2 THROW 50002, 'The brief needs at least 2 Participants.', 1;
+          IF @events < 3       THROW 50003, 'The brief needs at least 3 Events.', 1;
+          IF @enrolments < 1   THROW 50004, 'The brief needs sample enrolments.', 1;
+          IF EXISTS (SELECT 1 FROM dbo.Events e WHERE NOT EXISTS (SELECT 1 FROM dbo.Categories c WHERE c.EventId = e.EventId))
+              THROW 50005, 'Every event needs at least one category.', 1;
+          IF EXISTS (SELECT 1 FROM dbo.Users WHERE PasswordHash NOT LIKE '$2%')
+              THROW 50006, 'Found a password that is not stored as a BCrypt hash.', 1;
+          IF EXISTS (SELECT 1 FROM dbo.Enrolments en JOIN dbo.Categories c ON c.CategoryId = en.CategoryId WHERE c.EventId <> en.EventId)
+              THROW 50007, 'An enrolment uses a category from a different event.', 1;
+          IF EXISTS (SELECT 1 FROM dbo.Results r JOIN dbo.Enrolments en ON en.EnrolmentId = r.EnrolmentId WHERE en.Status <> N'Confirmed')
+              THROW 50008, 'A result exists for an enrolment that is not Confirmed.', 1;
+          IF (SELECT COUNT(*) FROM sys.extended_properties WHERE name = N'MS_Description') < 51
+              THROW 50009, 'Some tables or columns are missing their stored description.', 1;
+          PRINT 'Seed data meets the Part 1 brief.';
+          SQL
+          docker cp verify_seed.sql sql:/tmp/verify_seed.sql
+          docker exec sql $SQLCMD -S localhost -U sa -P "$SA_PASSWORD" -d RaceDayDB -b -i /tmp/verify_seed.sql
+
+      - name: Run the constraint tests
+        run: |
+          docker exec sql $SQLCMD -S localhost -U sa -P "$SA_PASSWORD" -b -W -i /tmp/RaceDay_Constraint_Tests.sql \
+            | tee constraint-tests.log
+
+      - name: Write the results to the job summary
+        if: always()
+        continue-on-error: true
+        run: |
+          {
+            echo "## Database checks on SQL Server 2022"
+            echo ""
+            echo "| Table | Rows seeded |"
+            echo "|---|---|"
+            docker exec sql $SQLCMD -S localhost -U sa -P "$SA_PASSWORD" -d RaceDayDB -h -1 -W -s "|" -Q \
+              "SET NOCOUNT ON; SELECT 'Roles', COUNT(*) FROM dbo.Roles UNION ALL SELECT 'EventTypes', COUNT(*) FROM dbo.EventTypes UNION ALL SELECT 'Users', COUNT(*) FROM dbo.Users UNION ALL SELECT 'Events', COUNT(*) FROM dbo.Events UNION ALL SELECT 'Categories', COUNT(*) FROM dbo.Categories UNION ALL SELECT 'Enrolments', COUNT(*) FROM dbo.Enrolments UNION ALL SELECT 'Results', COUNT(*) FROM dbo.Results" \
+              | awk -F'|' 'NF == 2 { print "| " $1 " | " $2 " |" }'
+            echo ""
+            echo "## Constraint tests"
+            echo ""
+            if [ -s constraint-tests.log ]; then
+              passed=$(grep -c '^PASS |' constraint-tests.log || true)
+              total=$(grep -cE '^(PASS|FAIL) \|' constraint-tests.log || true)
+              echo "**$passed of $total tests passed.** Each test tries to break (or use) one rule, and every test is rolled back."
+              echo ""
+              echo "| # | Result | Test | Expected constraint or rule |"
+              echo "|---|---|---|---|"
+              grep -E '^(PASS|FAIL) \|' constraint-tests.log \
+                | awk -F' [|] ' '{ icon = ($1 == "PASS") ? "✅ PASS" : "❌ FAIL"; print "| " $2 " | " icon " | " $3 " | `" $4 "` |" }'
+            else
+              echo "The constraint tests did not run - see the step logs above."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
