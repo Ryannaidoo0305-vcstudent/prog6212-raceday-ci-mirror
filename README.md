@@ -7,7 +7,7 @@
 | **Module** | PROG6212 - Programming 2B (POE) |
 | **Student** | Ryan Naidoo - ST10487315 |
 | **Current part** | Part 2 - ASP.NET Core Web API, in the [`Part2`](Part2) folder |
-| **Part 2 video** | PART2_VIDEO_LINK |
+| **Part 2 video** | https://youtu.be/lnFt0aqHebA |
 | **Part 1 video** | https://youtu.be/viBa_j2k-k4 |
 
 ## Overview
@@ -118,7 +118,7 @@ The GitHub Actions workflow in [`.github/workflows/ci.yml`](.github/workflows/ci
 
 ## Video
 
-**Part 2** (unlisted YouTube, in my own voice): **PART2_VIDEO_LINK**
+**Part 2** (unlisted YouTube, in my own voice): **https://youtu.be/lnFt0aqHebA**
 
 It goes through the rubric, shows every endpoint working in Swagger, explains the core logic, runs the tests and shows the CI build.
 
