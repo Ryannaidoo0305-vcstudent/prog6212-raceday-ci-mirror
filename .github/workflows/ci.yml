@@ -6,7 +6,8 @@
 #   Job 2  database       runs the SQL script twice on SQL Server 2022, checks the
 #                         seed data against the brief and runs the constraint tests
 # Both jobs write a results table to the run's Summary page.
-# Parts 2 and 3 will add jobs that build and test the API and the MVC app.
+#   Job 3  api            (Part 2) builds the Web API and runs the xUnit tests
+# Part 3 will add a job for the MVC app.
 
 name: RaceDay CI
 
@@ -158,5 +159,42 @@ jobs:
                 | awk -F' [|] ' '{ icon = ($1 == "PASS") ? "✅ PASS" : "❌ FAIL"; print "| " $2 " | " icon " | " $3 " | `" $4 "` |" }'
             else
               echo "The constraint tests did not run - see the step logs above."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  api:
+    name: Build and test the Web API (.NET 10)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore Part2/RaceDay.sln
+
+      - name: Build
+        run: dotnet build Part2/RaceDay.sln --no-restore --configuration Release
+
+      - name: Run the xUnit tests
+        run: dotnet test Part2/RaceDay.sln --no-build --configuration Release --logger "trx;LogFileName=results.trx" --results-directory test-results
+
+      - name: Write the test results to the Summary
+        if: always()
+        run: |
+          file=$(find test-results -name '*.trx' | head -1)
+          {
+            echo "## Part 2: Web API tests"
+            echo ""
+            if [ -n "$file" ]; then
+              total=$(grep -o 'total="[0-9]*"' "$file" | head -1 | grep -o '[0-9]*')
+              passed=$(grep -o 'passed="[0-9]*"' "$file" | head -1 | grep -o '[0-9]*')
+              echo "**$passed of $total tests passed.**"
+            else
+              echo "No test results were found - see the step logs."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
